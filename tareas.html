@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lista de Tareas - Evaluación Módulo 1</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <style>
+    :root {
+      --primary: #5A2A83;
+      --secondary: #83ddf3;
+      --accent: #e868ec;
+      --danger: #dc3545;
+      --background: #f3f8ff;
+      --text: #333;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--background);
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      background: #fff;
+      width: 100%; max-width: 500px;
+      border-radius: 12px;
+      box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    header {
+      background: var(--primary);
+      color: #fff;
+      padding: 20px;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 1.5rem;
+    }
+    main {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    .input-group {
+      display: flex;
+      gap: 10px;
+    }
+    #tarea {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-size: 1rem;
+    }
+    #añadirTarea {
+      padding: 10px 20px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    #añadirTarea:hover:not(:disabled) {
+      background: #be296f;
+    }
+    #añadirTarea:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .error {
+      color: var(--danger);
+      margin-top: 10px;
+      font-size: 0.9rem;
+      min-height: 1.2em;
+    }
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 20px;
+    }
+    .filters button,
+    .clear-btn {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 5px 10px;
+      border-radius: 4px;
+      transition: background 0.2s;
+    }
+    .filters button.active,
+    .filters button:hover,
+    .clear-btn:hover {
+      background: #efefef;
+    }
+    ul {
+      list-style: none;
+      margin-top: 20px;
+      flex: 1;
+      overflow-y: auto;
+    }
+    li {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      transition: background 0.2s;
+    }
+    li.completed .texto-tarea {
+      text-decoration: line-through;
+      color: #aaa;
+    }
+    .texto-tarea {
+      flex: 1;
+      word-break: break-word;
+    }
+    .remover {
+      background: var(--danger);
+      color: #fff;
+      border: none;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.3s;
+    }
+    .remover:hover {
+      background: #c82333;
+    }
+    footer {
+      background: var(--secondary);
+      text-align: right;
+      padding: 10px 20px;
+      font-size: 0.8rem;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Mi Lista de Tareas</h1>
+    </header>
+    <main>
+      <div class="input-group">
+        <input type="text" id="tarea" placeholder="¿Qué necesitas hacer hoy?" autofocus aria-label="Nueva tarea">
+        <button id="añadirTarea" disabled>Añadir</button>
+      </div>
+      <div id="errorMessage" class="error" aria-live="polite"></div>
+      <div class="controls">
+        <div class="filters">
+          <button data-filter="all" class="active">Todas</button>
+          <button data-filter="active">Activas</button>
+          <button data-filter="completed">Completadas</button>
+        </div>
+        <button class="clear-btn" id="clearCompleted">Limpiar completadas</button>
+      </div>
+      <ul id="listaTareas" aria-live="polite"></ul>
+    </main>
+    <footer>
+      <p>Jossue Guerrero – Evaluación Módulo 1</p>
+    </footer>
+  </div>
+
+  <script>
+    let listaTareas = JSON.parse(localStorage.getItem('listaTareas')) || [];
+    let filtroActual = 'all';
+
+    $(document).ready(function() {
+      renderizarTareas();
+      actualizarBoton();
+
+      $('#tarea')
+        .on('input', actualizarBoton)
+        .on('keypress', function(e) {
+          if (e.key === 'Enter' && !$('#añadirTarea').prop('disabled')) {
+            $('#añadirTarea').click();
+          }
+        });
+
+      $('#añadirTarea').on('click', function() {
+        const texto = $('#tarea').val().trim();
+        if (!texto) { mostrarError('Por favor ingresa una tarea'); return; }
+        if (listaTareas.some(t => t.texto === texto)) { mostrarError('La tarea ya existe'); return; }
+        listaTareas.push({ texto, completada: false });
+        guardarYRenderizar();
+        $('#tarea').val(''); actualizarBoton();
+      });
+
+      $('#listaTareas').on('change', '.realizada', function() {
+        const idx = $(this).closest('li').data('idx');
+        listaTareas[idx].completada = this.checked;
+        guardarYRenderizar();
+      });
+
+      $('#listaTareas').on('click', '.remover', function() {
+        const idx = $(this).closest('li').data('idx');
+        listaTareas.splice(idx, 1);
+        guardarYRenderizar();
+      });
+
+      $('.filters button').on('click', function() {
+        $('.filters button').removeClass('active');
+        $(this).addClass('active');
+        filtroActual = $(this).data('filter');
+        renderizarTareas();
+      });
+
+      $('#clearCompleted').on('click', function() {
+        listaTareas = listaTareas.filter(t => !t.completada);
+        guardarYRenderizar();
+      });
+    });
+
+    function mostrarError(msg) {
+      $('#errorMessage').text(msg);
+      setTimeout(() => $('#errorMessage').text(''), 3000);
+    }
+
+    function actualizarBoton() {
+      $('#añadirTarea').prop('disabled', !$('#tarea').val().trim());
+    }
+
+    function guardarYRenderizar() {
+      localStorage.setItem('listaTareas', JSON.stringify(listaTareas));
+      renderizarTareas();
+    }
+
+    function renderizarTareas() {
+      const $ul = $('#listaTareas').empty();
+      listaTareas.forEach((tarea, idx) => {
+        if (filtroActual === 'active' && tarea.completada) return;
+        if (filtroActual === 'completed' && !tarea.completada) return;
+        const $li = $(`
+          <li data-idx="${idx}" class="${tarea.completada ? 'completed' : ''}">
+            <label><input type="checkbox" class="realizada" ${tarea.completada ? 'checked' : ''}></label>
+            <span class="texto-tarea">${tarea.texto}</span>
+            <button class="remover" aria-label="Eliminar tarea">&times;</button>
+          </li>
+        `);
+        $ul.append($li);
+      });
+    }
+  </script>
+</body>
+</html>
